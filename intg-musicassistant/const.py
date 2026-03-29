@@ -47,7 +47,7 @@ class SimpleCommands(StrEnum):
 
 # Map Music Assistant PlaybackState values to ucapi media_player States
 MA_STATE_MAP: dict[str, str] = {
-    "idle": "OFF",       # idle → treated as OFF (no active playback)
+    "idle": "ON",        # idle → player is on/ready but not playing
     "paused": "PAUSED",
     "playing": "PLAYING",
     "unknown": "UNKNOWN",

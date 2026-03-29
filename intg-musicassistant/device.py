@@ -23,12 +23,12 @@ from music_assistant_models.player_queue import PlayerQueue
 
 from const import DeviceConfig, MA_REPEAT_MAP, MA_STATE_MAP, UC_REPEAT_MAP
 from ucapi import media_player
-from ucapi_framework import BaseConfigManager, PersistentConnectionDevice
+from ucapi_framework import BaseConfigManager, ExternalClientDevice
 
 _LOG = logging.getLogger(__name__)
 
 
-class Device(PersistentConnectionDevice):
+class Device(ExternalClientDevice):
     """
     Represents one Music Assistant server.
 
@@ -39,10 +39,14 @@ class Device(PersistentConnectionDevice):
     Entity instances (MediaPlayer, Select, Sensor…) call the helpers defined
     here to read current state and issue commands.
 
-    PersistentConnectionDevice lifecycle:
-      establish_connection() → connects, returns client as "connection"
-      maintain_connection()  → runs start_listening() which blocks until disconnect
-      close_connection()     → calls client.disconnect()
+    ExternalClientDevice lifecycle:
+      create_client()        → instantiates MusicAssistantClient
+      connect_client()       → subscribes events, starts start_listening() task,
+                               awaits init_ready so players are populated on return
+      disconnect_client()    → calls client.disconnect()
+      check_client_connected() → returns client.connection.connected
+    The framework watchdog polls check_client_connected() and triggers
+    reconnect automatically when the connection drops.
     """
 
     def __init__(
@@ -57,14 +61,17 @@ class Device(PersistentConnectionDevice):
             loop=loop,
             config_manager=config_manager,
             driver=driver,
+            # Watchdog checks check_client_connected() every 30 s and reconnects
+            # automatically if the MA WebSocket drops.
+            enable_watchdog=True,
+            watchdog_interval=30,
+            reconnect_delay=5,
+            max_reconnect_attempts=0,  # infinite retries
         )
 
-        self._client: MusicAssistantClient | None = None
         self._init_ready: asyncio.Event = asyncio.Event()
-
-        # Snapshot dicts – updated by MA event callbacks
-        self._players: dict[str, Player] = {}
-        self._queues: dict[str, PlayerQueue] = {}
+        self._listen_task: asyncio.Task | None = None
+        self._poll_task: asyncio.Task | None = None
 
     # =========================================================================
     # Properties
@@ -93,12 +100,15 @@ class Device(PersistentConnectionDevice):
     @property
     def players(self) -> list[Player]:
         """Return all known MA players."""
-        return list(self._players.values())
+        client: MusicAssistantClient | None = self._client
+        if client is None:
+            return []
+        return list(client.players)
 
     @property
     def player_ids(self) -> list[str]:
         """Return all known MA player IDs."""
-        return list(self._players.keys())
+        return [p.player_id for p in self.players]
 
     @property
     def client(self) -> MusicAssistantClient | None:
@@ -107,109 +117,118 @@ class Device(PersistentConnectionDevice):
 
     def get_player(self, player_id: str) -> Player | None:
         """Return a Player by its MA player_id."""
-        return self._players.get(player_id)
+        if self._client is None:
+            return None
+        return self._client.players.get(player_id)
 
     def get_queue(self, queue_id: str) -> PlayerQueue | None:
         """Return a PlayerQueue by queue_id (usually == player_id)."""
-        return self._queues.get(queue_id)
+        if self._client is None:
+            return None
+        return self._client.player_queues.get(queue_id)
 
     # =========================================================================
-    # PersistentConnectionDevice hooks
+    # ExternalClientDevice hooks
     # =========================================================================
 
-    async def establish_connection(self) -> MusicAssistantClient:
-        """
-        Open a WebSocket connection to the Music Assistant server.
-
-        Called by the framework's _connection_loop.  Returns the client object
-        which is stored as self._connection.
-        """
-        _LOG.info("[%s] Connecting to %s", self.log_id, self.address)
-
+    async def create_client(self) -> MusicAssistantClient:
+        """Instantiate the MA client (no connection yet)."""
         if not self.address:
             raise ValueError("No server address configured")
-
         token = self._device_config.token or None
-        client = MusicAssistantClient(self.address, None, token=token)
+        return MusicAssistantClient(self.address, None, token=token)
+
+    async def connect_client(self) -> None:
+        """
+        Subscribe to MA events and start the listening task.
+
+        ``start_listening()`` is the only MA call that fetches initial player/queue
+        state (via ``fetch_initial_state()``).  We launch it as a background task,
+        then await ``init_ready`` so that ``client.players`` is populated before
+        the framework marks the device as connected and registers entities.
+        """
+        client: MusicAssistantClient = self._client
+        _LOG.info("[%s] Connecting to %s", self.log_id, self.address)
 
         self._init_ready.clear()
 
-        # Subscribe to relevant MA events before connecting
         client.subscribe(
             self._on_player_event,
-            (EventType.PLAYER_ADDED, EventType.PLAYER_UPDATED, EventType.PLAYER_REMOVED),
+            (
+                EventType.PLAYER_ADDED,
+                EventType.PLAYER_UPDATED,
+                EventType.PLAYER_REMOVED,
+            ),
         )
         client.subscribe(
             self._on_queue_event,
             (EventType.QUEUE_ADDED, EventType.QUEUE_UPDATED),
         )
 
-        # Connect (handshake) without starting the full listener loop yet
-        await client.connect()
+        # start_listening() connects, fetches all state, sets init_ready, then blocks.
+        # Run it in the background so we can await init_ready here.
+        self._listen_task = asyncio.create_task(
+            client.start_listening(init_ready=self._init_ready)
+        )
 
-        # Snapshot initial state
-        for player in client.players:
-            self._players[player.player_id] = player
-        for queue in client.player_queues:
-            self._queues[queue.queue_id] = queue
+        try:
+            await asyncio.wait_for(self._init_ready.wait(), timeout=5)
+        except asyncio.TimeoutError as exc:
+            self._listen_task.cancel()
+            self._listen_task = None
+            raise ConnectionError(
+                "Timed out waiting for Music Assistant initial state"
+            ) from exc
 
-        self._client = client
-
-        _LOG.info("[%s] Connected – %d players found", self.log_id, len(self._players))
+        _LOG.info("[%s] Connected – %d players found", self.log_id, len(self.players))
+        self._poll_task = asyncio.create_task(self._initial_sync())
         self.push_update()
 
-        return client
-
-    async def maintain_connection(self) -> None:
-        """
-        Keep the connection alive by running the MA message listener.
-
-        start_listening() is a blocking coroutine that processes incoming
-        WebSocket messages until the connection drops.
-        """
-        if self._client is None:
-            return
-        try:
-            await self._client.start_listening()
-        except Exception as exc:  # pylint: disable=broad-except
-            _LOG.debug("[%s] start_listening exited: %s", self.log_id, exc)
-            raise  # re-raise so _connection_loop can handle reconnect
-
-    async def close_connection(self) -> None:
-        """Close the WebSocket connection and clear state."""
-        if self._client is not None:
+    async def disconnect_client(self) -> None:
+        """Stop the listening task and disconnect the MA client."""
+        for task in (self._poll_task, self._listen_task):
+            if task is not None and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):  # pylint: disable=broad-except
+                    pass
+        self._poll_task = None
+        self._listen_task = None
+        client: MusicAssistantClient | None = self._client
+        if client is not None:
             try:
-                await self._client.disconnect()
+                await client.disconnect()
             except Exception as exc:  # pylint: disable=broad-except
                 _LOG.debug("[%s] Disconnect error: %s", self.log_id, exc)
-            self._client = None
-        self._players.clear()
-        self._queues.clear()
+
+    def check_client_connected(self) -> bool:
+        """Return True if the MA WebSocket is currently connected."""
+        client: MusicAssistantClient | None = self._client
+        return client is not None and client.connection.connected
 
     # =========================================================================
     # MA event handlers
     # =========================================================================
 
-    def _on_player_event(self, event: Any) -> None:
+    def _on_player_event(self, _event: Any) -> None:
         """Handle player_added / player_updated / player_removed events."""
-        if event.event == EventType.PLAYER_REMOVED:
-            self._players.pop(event.object_id, None)
-        elif event.data:
-            try:
-                player = Player.from_dict(event.data)
-                self._players[player.player_id] = player
-            except Exception as exc:  # pylint: disable=broad-except
-                _LOG.warning("[%s] Failed to parse player event: %s", self.log_id, exc)
         self.push_update()
 
-    def _on_queue_event(self, event: Any) -> None:
+    def _on_queue_event(self, _event: Any) -> None:
         """Handle queue_added / queue_updated events."""
-        if event.data:
-            try:
-                queue = PlayerQueue.from_dict(event.data)
-                self._queues[queue.queue_id] = queue
-            except Exception as exc:  # pylint: disable=broad-except
-                _LOG.warning("[%s] Failed to parse queue event: %s", self.log_id, exc)
+        self.push_update()
+
+    async def _initial_sync(self) -> None:
+        """
+        One-shot initial sync after entity registration completes.
+
+        push_update() at the end of connect_client() fires before the framework
+        has registered entities, so entities miss the initial state.  A short
+        delay here lets async_register_available_entities() finish so that the
+        push_update() below actually reaches all subscribed entities.
+        """
+        await asyncio.sleep(1)
         self.push_update()
 
     # =========================================================================
@@ -218,7 +237,7 @@ class Device(PersistentConnectionDevice):
 
     def get_ucapi_state(self, player_id: str) -> media_player.States:
         """Map an MA player's state to a ucapi media_player.States value."""
-        player = self._players.get(player_id)
+        player = self.get_player(player_id)
         if player is None:
             return media_player.States.UNAVAILABLE
         if not player.available or not player.enabled:
@@ -226,7 +245,7 @@ class Device(PersistentConnectionDevice):
         if player.powered is False:
             return media_player.States.OFF
 
-        queue = self._queues.get(player_id)
+        queue = self.get_queue(player_id)
         if queue is not None:
             state_str = MA_STATE_MAP.get(queue.state.value, "UNKNOWN")
         else:
@@ -241,7 +260,7 @@ class Device(PersistentConnectionDevice):
         Keys correspond to ucapi MediaPlayer Attribute names.
         """
         info: dict[str, Any] = {}
-        queue = self._queues.get(player_id)
+        queue = self.get_queue(player_id)
         if queue is None:
             return info
 
@@ -251,7 +270,9 @@ class Device(PersistentConnectionDevice):
 
         media_item = current.media_item
         if media_item is not None:
-            info["media_title"] = getattr(media_item, "name", current.name) or current.name
+            info["media_title"] = (
+                getattr(media_item, "name", current.name) or current.name
+            )
             artists = getattr(media_item, "artists", None)
             if artists:
                 info["media_artist"] = "/".join(a.name for a in artists if a.name)
@@ -294,7 +315,7 @@ class Device(PersistentConnectionDevice):
 
     def get_repeat_mode(self, player_id: str) -> media_player.RepeatMode:
         """Return the ucapi RepeatMode for the given player's queue."""
-        queue = self._queues.get(player_id)
+        queue = self.get_queue(player_id)
         if queue is None:
             return media_player.RepeatMode.OFF
         ucapi_repeat = MA_REPEAT_MAP.get(queue.repeat_mode.value, "OFF")
@@ -302,19 +323,19 @@ class Device(PersistentConnectionDevice):
 
     def get_shuffle(self, player_id: str) -> bool:
         """Return shuffle state for the given player's queue."""
-        queue = self._queues.get(player_id)
+        queue = self.get_queue(player_id)
         return queue.shuffle_enabled if queue else False
 
     def get_source_list(self, player_id: str) -> list[str]:
         """Return the list of available sources for a player."""
-        player = self._players.get(player_id)
+        player = self.get_player(player_id)
         if player is None:
             return []
         return [s.name for s in player.source_list if not s.passive]
 
     def get_active_source(self, player_id: str) -> str | None:
         """Return the active source name for a player."""
-        player = self._players.get(player_id)
+        player = self.get_player(player_id)
         if player is None:
             return None
         if player.active_source is None:
@@ -326,14 +347,14 @@ class Device(PersistentConnectionDevice):
 
     def get_sound_mode_list(self, player_id: str) -> list[str]:
         """Return available sound modes for a player."""
-        player = self._players.get(player_id)
+        player = self.get_player(player_id)
         if player is None:
             return []
         return [sm.name for sm in player.sound_mode_list if not sm.passive]
 
     def get_active_sound_mode(self, player_id: str) -> str | None:
         """Return active sound mode name for a player."""
-        player = self._players.get(player_id)
+        player = self.get_player(player_id)
         if player is None:
             return None
         if player.active_sound_mode is None:
@@ -345,11 +366,11 @@ class Device(PersistentConnectionDevice):
 
     def get_all_player_names(self) -> list[str]:
         """Return a list of all available MA player display names."""
-        return [p.name for p in self._players.values() if p.available and p.enabled]
+        return [p.name for p in self.players if p.available and p.enabled]
 
     def get_player_id_by_name(self, name: str) -> str | None:
         """Look up a player's ID by its display name."""
-        for p in self._players.values():
+        for p in self.players:
             if p.name == name:
                 return p.player_id
         return None
@@ -398,7 +419,9 @@ class Device(PersistentConnectionDevice):
 
     async def volume_set(self, player_id: str, volume: int) -> None:
         """Set volume (0-100)."""
-        await self._send("players/cmd/volume_set", player_id=player_id, volume_level=volume)
+        await self._send(
+            "players/cmd/volume_set", player_id=player_id, volume_level=volume
+        )
 
     async def volume_up(self, player_id: str) -> None:
         """Increase volume by one step."""
@@ -419,11 +442,15 @@ class Device(PersistentConnectionDevice):
     async def set_repeat(self, player_id: str, repeat_mode: str) -> None:
         """Set repeat mode (ucapi RepeatMode string → MA RepeatMode)."""
         ma_mode = UC_REPEAT_MAP.get(repeat_mode, "off")
-        await self._send("player_queues/repeat", queue_id=player_id, repeat_mode=ma_mode)
+        await self._send(
+            "player_queues/repeat", queue_id=player_id, repeat_mode=ma_mode
+        )
 
     async def set_shuffle(self, player_id: str, enabled: bool) -> None:
         """Enable or disable shuffle."""
-        await self._send("player_queues/shuffle", queue_id=player_id, shuffle_enabled=enabled)
+        await self._send(
+            "player_queues/shuffle", queue_id=player_id, shuffle_enabled=enabled
+        )
 
     async def clear_queue(self, player_id: str) -> None:
         """Clear the player queue."""
@@ -457,7 +484,7 @@ class Device(PersistentConnectionDevice):
 
     async def select_source(self, player_id: str, source_name: str) -> None:
         """Select a source by its display name."""
-        player = self._players.get(player_id)
+        player = self.get_player(player_id)
         if player is None:
             raise ValueError(f"Unknown player: {player_id}")
         source_id = source_name
@@ -465,11 +492,13 @@ class Device(PersistentConnectionDevice):
             if src.name == source_name:
                 source_id = src.id
                 break
-        await self._send("players/cmd/select_source", player_id=player_id, source=source_id)
+        await self._send(
+            "players/cmd/select_source", player_id=player_id, source=source_id
+        )
 
     async def select_sound_mode(self, player_id: str, mode_name: str) -> None:
         """Select a sound mode by its display name."""
-        player = self._players.get(player_id)
+        player = self.get_player(player_id)
         if player is None:
             raise ValueError(f"Unknown player: {player_id}")
         mode_id = mode_name
@@ -490,10 +519,3 @@ class Device(PersistentConnectionDevice):
         if self._client is None:
             raise ConnectionError("Not connected to Music Assistant")
         return await self._client.send_command(command, **kwargs)
-
-    @property
-    def state(self) -> media_player.States:
-        """Return a generic device state used by the framework for health checks."""
-        if self._client is not None and self._client.connection.connected:
-            return media_player.States.ON
-        return media_player.States.OFF

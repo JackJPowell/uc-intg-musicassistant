@@ -28,6 +28,16 @@ _LOG = logging.getLogger(__name__)
 class MusicAssistantSetupFlow(BaseSetupFlow[DeviceConfig]):
     """Setup flow for a Music Assistant server."""
 
+    def get_additional_discovery_fields(self) -> list[dict]:
+        """Add an optional auth token field to the discovery selection screen."""
+        return [
+            {
+                "field": {"text": {"value": ""}},
+                "id": "token",
+                "label": {"en": "Access Token (leave blank if not required)"},
+            }
+        ]
+
     def get_manual_entry_form(self) -> RequestUserInput:
         """Return the setup form shown to the user."""
         return RequestUserInput(

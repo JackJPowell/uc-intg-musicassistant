@@ -15,9 +15,10 @@ import os
 
 from const import DeviceConfig
 from device import Device
+from discover import DeviceDiscovery
 from media_player import MusicAssistantMediaPlayer
-from select_entity import ActivePlayerSelect, SourceSelect
-from sensor import QueueSizeSensor
+from select_entity import SourceSelect
+from sensor import ActivePlayersSensor, NowPlayingSensor, QueuePositionSensor
 from setup import MusicAssistantSetupFlow
 from ucapi_framework import BaseConfigManager, BaseIntegrationDriver, get_config_path
 
@@ -44,14 +45,34 @@ async def main() -> None:
     # BaseIntegrationDriver manages one Device per configured MA server and
     # auto-registers entity instances as they are created.
     # require_connection_before_registry=True ensures entities are only registered
-    # after the Device.connect() succeeds and player data is available.
+    # after establish_connection() succeeds and device.players is populated.
+    #
+    # Factory lambdas iterate over device.players so that one set of entities is
+    # created per MA player discovered on the server.
     driver = BaseIntegrationDriver(
         device_class=Device,
-        entity_classes=[  # type: ignore[arg-type]
-            MusicAssistantMediaPlayer,
-            ActivePlayerSelect,
-            SourceSelect,
-            QueueSizeSensor,
+        entity_classes=[
+            # One media player entity per MA player
+            lambda cfg, dev: [
+                MusicAssistantMediaPlayer(cfg, dev, p.player_id, p.name)
+                for p in dev.players
+            ],
+            # One source-select per player that has sources
+            lambda cfg, dev: [
+                SourceSelect(cfg, dev, p.player_id, p.name)
+                for p in dev.players
+                if dev.get_source_list(p.player_id)
+            ],
+            # "Artist – Title" sensor per player
+            lambda cfg, dev: [
+                NowPlayingSensor(cfg, dev, p.player_id, p.name) for p in dev.players
+            ],
+            # Queue position sensor per player
+            lambda cfg, dev: [
+                QueuePositionSensor(cfg, dev, p.player_id, p.name) for p in dev.players
+            ],
+            # One server-level sensor: how many players are currently playing
+            ActivePlayersSensor,
         ],
         require_connection_before_registry=True,
     )
@@ -66,8 +87,9 @@ async def main() -> None:
     # Load any previously configured MA servers
     await driver.register_all_configured_devices()
 
-    # Setup handler — no mDNS discovery; user always enters the server URL manually
-    setup_handler = MusicAssistantSetupFlow.create_handler(driver)
+    # Discover Music Assistant servers on the local network via Zeroconf (_mass._tcp.local.)
+    discovery = DeviceDiscovery(timeout=5)
+    setup_handler = MusicAssistantSetupFlow.create_handler(driver, discovery=discovery)
 
     await driver.api.init("driver.json", setup_handler)
 

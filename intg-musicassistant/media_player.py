@@ -24,7 +24,7 @@ from ucapi.api_definitions import (
     SearchResults,
 )
 from ucapi.media_player import Attributes, Commands, DeviceClasses, Features
-from ucapi_framework import MediaPlayerEntity, create_entity_id
+from ucapi_framework import MediaPlayerAttributes, MediaPlayerEntity, create_entity_id
 
 _LOG = logging.getLogger(__name__)
 
@@ -105,9 +105,7 @@ class MusicAssistantMediaPlayer(MediaPlayerEntity):
             entity_id,
             player_name,
             features,
-            attributes={
-                Attributes.STATE: media_player.States.UNAVAILABLE,
-            },
+            attributes={Attributes.STATE: ""},
             device_class=DeviceClasses.SPEAKER,
             options={
                 media_player.Options.SIMPLE_COMMANDS: [c.value for c in SimpleCommands]
@@ -124,49 +122,36 @@ class MusicAssistantMediaPlayer(MediaPlayerEntity):
     async def sync_state(self) -> None:
         """Pull current state from the Device and push all attributes to Remote."""
         if self._device is None:
-            self.set_state(media_player.States.UNAVAILABLE, update=True)
+            self.update(MediaPlayerAttributes(STATE=media_player.States.UNAVAILABLE))
             return
 
-        state = self._device.get_ucapi_state(self._player_id)
-        media_info = self._device.get_media_info(self._player_id)
-        repeat = self._device.get_repeat_mode(self._player_id)
-        shuffle = self._device.get_shuffle(self._player_id)
-        source_list = self._device.get_source_list(self._player_id)
-        active_source = self._device.get_active_source(self._player_id)
-        sound_mode_list = self._device.get_sound_mode_list(self._player_id)
-        active_sound_mode = self._device.get_active_sound_mode(self._player_id)
-
         ma_player = self._device.get_player(self._player_id)
-        volume = ma_player.volume_level if ma_player else None
-        muted = ma_player.volume_muted if ma_player else None
+        media_info = self._device.get_media_info(self._player_id)
+        source_list = self._device.get_source_list(self._player_id)
+        sound_mode_list = self._device.get_sound_mode_list(self._player_id)
 
-        # Batch all attribute changes and emit one update at the end
-        self.set_state(state)
-        if volume is not None:
-            self.set_volume(int(volume))
-        if muted is not None:
-            self.set_muted(muted)
-        self.set_repeat(repeat)
-        self.set_shuffle(shuffle)
-        if source_list is not None:
-            self.set_source_list(source_list)
-        if active_source is not None:
-            self.set_source(active_source)
-        if sound_mode_list is not None:
-            self.set_sound_mode_list(sound_mode_list)
-        if active_sound_mode is not None:
-            self.set_sound_mode(active_sound_mode)
-
-        self.set_media_title(media_info.get("media_title"))
-        self.set_media_artist(media_info.get("media_artist"))
-        self.set_media_album(media_info.get("media_album"))
-        self.set_media_duration(media_info.get("media_duration"))
-        self.set_media_position(media_info.get("media_position"))
-        self.set_media_image_url(media_info.get("media_image_url"))
-        self.set_media_type(media_info.get("media_type"))
-
-        # Trigger one update to the Remote
-        self.update(self.attributes)
+        self.update(
+            MediaPlayerAttributes(
+                STATE=self._device.get_ucapi_state(self._player_id),
+                VOLUME=int(ma_player.volume_level)
+                if ma_player and ma_player.volume_level is not None
+                else None,
+                MUTED=ma_player.volume_muted if ma_player else None,
+                REPEAT=self._device.get_repeat_mode(self._player_id),
+                SHUFFLE=self._device.get_shuffle(self._player_id),
+                SOURCE=self._device.get_active_source(self._player_id),
+                SOURCE_LIST=source_list if source_list else None,
+                SOUND_MODE=self._device.get_active_sound_mode(self._player_id),
+                SOUND_MODE_LIST=sound_mode_list if sound_mode_list else None,
+                MEDIA_TITLE=media_info.get("media_title"),
+                MEDIA_ARTIST=media_info.get("media_artist"),
+                MEDIA_ALBUM=media_info.get("media_album"),
+                MEDIA_DURATION=media_info.get("media_duration"),
+                MEDIA_POSITION=media_info.get("media_position"),
+                MEDIA_IMAGE_URL=media_info.get("media_image_url"),
+                MEDIA_TYPE=media_info.get("media_type"),
+            )
+        )
 
     # =========================================================================
     # Media browsing / searching

@@ -76,7 +76,22 @@ def _paging(options: BrowseOptions) -> tuple[int, int]:
     return (page - 1) * limit, limit
 
 
-def _pagination(page: int, limit: int, total: int) -> Pagination:
+def _pagination(page: int, limit: int, count: int, offset: int = 0) -> Pagination:
+    """
+    Build a Pagination object for the remote.
+
+    ``count`` is the number of items returned on this page.  MA library calls
+    don't expose a total-item count, so we infer whether more pages exist: if
+    the page came back full we report one extra item beyond the current page so
+    the remote knows to request the next page; if it came back short we're on
+    the last page.
+    """
+    if count == limit:
+        # Page is full — there may be more; report total as one beyond this page
+        total = offset + limit + 1
+    else:
+        # Short page — this is the last one
+        total = offset + count
     return Pagination(page=page, limit=limit, count=total)
 
 
@@ -185,7 +200,7 @@ def _generic_item(client: MusicAssistantClient, item: Any) -> BrowseMediaItem:
         return _playlist_item(client, item)
     if mt in (MediaType.RADIO, MediaType.PLUGIN_SOURCE):
         return _radio_item(client, item)
-    # Generic folder / unknown
+    # Generic folder / unknown — only allow browsing if it has an item_id that looks like a container
     return BrowseMediaItem(
         title=getattr(item, "name", str(item)),
         media_class=MediaClass.DIRECTORY,
@@ -236,44 +251,52 @@ async def browse(client: MusicAssistantClient, options: BrowseOptions) -> Browse
                 BrowseMediaItem(title="Radio", media_class=MediaClass.RADIO, media_type=MediaContentType.RADIO, media_id=_RADIO_ID, can_browse=True),
             ],
         )
-        return BrowseResults(media=root, pagination=_pagination(1, 5, 5))
+        return BrowseResults(media=root, pagination=_pagination(1, 5, 5, 0))
 
     # ── Library sections ─────────────────────────────────────────────────────
     if media_id == _ARTISTS_ID:
         items = await client.music.get_library_artists(limit=limit, offset=offset)
         children = [_artist_item(client, a) for a in items]
         root = BrowseMediaItem(title="Artists", media_class=MediaClass.ARTIST, media_type=MediaContentType.ARTIST, media_id=_ARTISTS_ID, can_browse=True, items=children)
-        return BrowseResults(media=root, pagination=_pagination(page, len(children), len(children)))
+        return BrowseResults(media=root, pagination=_pagination(page, limit, len(children), offset))
 
     if media_id == _ALBUMS_ID:
         items = await client.music.get_library_albums(limit=limit, offset=offset)
         children = [_album_item(client, a) for a in items]
         root = BrowseMediaItem(title="Albums", media_class=MediaClass.ALBUM, media_type=MediaContentType.ALBUM, media_id=_ALBUMS_ID, can_browse=True, items=children)
-        return BrowseResults(media=root, pagination=_pagination(page, len(children), len(children)))
+        return BrowseResults(media=root, pagination=_pagination(page, limit, len(children), offset))
 
     if media_id == _TRACKS_ID:
         items = await client.music.get_library_tracks(limit=limit, offset=offset)
         children = [_track_item(client, t) for t in items]
         root = BrowseMediaItem(title="Tracks", media_class=MediaClass.TRACK, media_type=MediaContentType.TRACK, media_id=_TRACKS_ID, can_browse=True, items=children)
-        return BrowseResults(media=root, pagination=_pagination(page, len(children), len(children)))
+        return BrowseResults(media=root, pagination=_pagination(page, limit, len(children), offset))
 
     if media_id == _PLAYLISTS_ID:
         items = await client.music.get_library_playlists(limit=limit, offset=offset)
         children = [_playlist_item(client, p) for p in items]
         root = BrowseMediaItem(title="Playlists", media_class=MediaClass.PLAYLIST, media_type=MediaContentType.PLAYLIST, media_id=_PLAYLISTS_ID, can_browse=True, items=children)
-        return BrowseResults(media=root, pagination=_pagination(page, len(children), len(children)))
+        return BrowseResults(media=root, pagination=_pagination(page, limit, len(children), offset))
 
     if media_id == _RADIO_ID:
         items = await client.music.get_library_radios(limit=limit, offset=offset)
         children = [_radio_item(client, r) for r in items]
         root = BrowseMediaItem(title="Radio", media_class=MediaClass.RADIO, media_type=MediaContentType.RADIO, media_id=_RADIO_ID, can_browse=True, items=children)
-        return BrowseResults(media=root, pagination=_pagination(page, len(children), len(children)))
+        return BrowseResults(media=root, pagination=_pagination(page, limit, len(children), offset))
 
     # ── MA URI → delegate to MA browse ───────────────────────────────────────
     # MA URIs look like: library://artists/123, spotify://album/xyz, etc.
+    _LEAF_TYPES = (MediaType.TRACK, MediaType.RADIO, MediaType.PLUGIN_SOURCE)
     try:
         ma_items = await client.music.browse(path=media_id)
         children = [_generic_item(client, i) for i in ma_items[offset: offset + limit]]
+        # Don't mark the wrapper as browsable if all children are leaf items
+        # (tracks/radio) — doing so causes the remote to cycle on an empty
+        # directory when it tries to browse into the same URI again.
+        has_containers = any(
+            getattr(i, "media_type", None) not in _LEAF_TYPES
+            for i in ma_items
+        )
         # Try to get a sensible title from the first item or the path
         title = media_id.split("/")[-1] or media_id
         root = BrowseMediaItem(
@@ -281,14 +304,15 @@ async def browse(client: MusicAssistantClient, options: BrowseOptions) -> Browse
             media_class=MediaClass.DIRECTORY,
             media_type=MediaContentType.MUSIC,
             media_id=media_id,
-            can_browse=True,
+            can_browse=bool(children) and has_containers,
             items=children,
         )
-        return BrowseResults(media=root, pagination=_pagination(page, len(children), len(children)))
+        return BrowseResults(media=root, pagination=_pagination(page, limit, len(children), offset))
     except Exception as exc:  # pylint: disable=broad-except
         _LOG.warning("MA browse failed for %s: %s", media_id, exc)
-        empty = BrowseMediaItem(title=media_id, media_class=MediaClass.DIRECTORY, media_type=MediaContentType.MUSIC, media_id=media_id, can_browse=True, items=[])
-        return BrowseResults(media=empty, pagination=_pagination(1, 0, 0))
+        # can_browse=False prevents the remote from retrying the same path in a loop
+        empty = BrowseMediaItem(title=media_id, media_class=MediaClass.DIRECTORY, media_type=MediaContentType.MUSIC, media_id=media_id, can_browse=False, items=[])
+        return BrowseResults(media=empty, pagination=_pagination(1, 0, 0, 0))
 
 
 # ---------------------------------------------------------------------------
@@ -305,7 +329,7 @@ async def search(client: MusicAssistantClient, options: SearchOptions) -> Search
     """
     query = (options.query or "").strip()
     if not query:
-        return SearchResults(media=[], pagination=_pagination(1, 0, 0))
+        return SearchResults(media=[], pagination=_pagination(1, 0, 0, 0))
 
     limit = _DEFAULT_LIMIT
     if options.paging and options.paging.limit:
