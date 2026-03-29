@@ -20,5 +20,5 @@ ENV UC_CONFIG_HOME="/config"
 # TODO: Update the image source URL
 LABEL org.opencontainers.image.source https://github.com/yourusername/uc-intg-yourdevice
 
-# TODO: Update the path if you rename the intg-template folder
-CMD ["python3", "-u", "intg-template/driver.py"]
+# TODO: Update the path if you rename the intg-musicassistant folder
+CMD ["python3", "-u", "intg-musicassistant/driver.py"]

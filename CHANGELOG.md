@@ -1,4 +1,4 @@
-# Integration Template Changelog
+# Integration Music Assistant Changelog
 
 All notable changes to this project will be documented in this file.
 

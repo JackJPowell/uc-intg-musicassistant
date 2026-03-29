@@ -1,24 +1,24 @@
-# Unfolded Circle Integration Template
+# Unfolded Circle Integration Music Assistant
 
-A template repository for creating [Unfolded Circle Remote Two/3](https://www.unfoldedcircle.com/) integration drivers using the [ucapi-framework](https://github.com/jackjpowell/ucapi-framework).
+A Music Assistant repository for creating [Unfolded Circle Remote Two/3](https://www.unfoldedcircle.com/) integration drivers using the [ucapi-framework](https://github.com/jackjpowell/ucapi-framework).
 
 ## Getting Started
 
-1. **Clone or use this template** to create your own integration repository
-2. **Rename the integration folder** from `intg-template` to `intg-yourdevice`
+1. **Clone or use this Music Assistant** to create your own integration repository
+2. **Rename the integration folder** from `intg-musicassistant` to `intg-yourdevice`
 3. **Update the following files** with your device-specific information:
    - `driver.json` - Integration metadata (name, description, developer info)
-   - `intg-template/const.py` - Device configuration and constants
-   - `intg-template/device.py` - Device communication logic
-   - `intg-template/media_player.py` - Media player entity implementation
-   - `intg-template/setup.py` - Setup flow and configuration forms
-   - `intg-template/discover.py` - Device discovery (if applicable)
+   - `intg-musicassistant/const.py` - Device configuration and constants
+   - `intg-musicassistant/device.py` - Device communication logic
+   - `intg-musicassistant/media_player.py` - Media player entity implementation
+   - `intg-musicassistant/setup.py` - Setup flow and configuration forms
+   - `intg-musicassistant/discover.py` - Device discovery (if applicable)
 
 ## Project Structure
 
 ```
 ├── driver.json              # Integration metadata and configuration
-├── intg-template/           # Main integration code (rename this folder)
+├── intg-musicassistant/           # Main integration code (rename this folder)
 │   ├── const.py             # Constants and device configuration dataclass
 │   ├── device.py            # Device communication and state management
 │   ├── discover.py          # Network device discovery
@@ -52,7 +52,7 @@ A template repository for creating [Unfolded Circle Remote Two/3](https://www.un
 
 3. Run the integration:
    ```bash
-   python intg-template/driver.py
+   python intg-musicassistant/driver.py
    ```
 
 ### Environment Variables

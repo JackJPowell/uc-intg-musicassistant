@@ -19,13 +19,13 @@ pip3 install -r test-requirements.txt
 The following tests are run as GitHub action for each push on the main branch and for pull requests.
 They can also be run anytime on a local developer machine:
 
-> **Note:** Replace `intg-template` with your integration folder name.
+> **Note:** Replace `intg-musicassistant` with your integration folder name.
 
 ```shell
-python -m pylint intg-template
-python -m flake8 intg-template --count --show-source --statistics
-python -m isort intg-template/. --check --verbose 
-python -m black intg-template --check --verbose --line-length 120
+python -m pylint intg-musicassistant
+python -m flake8 intg-musicassistant --count --show-source --statistics
+python -m isort intg-musicassistant/. --check --verbose 
+python -m black intg-musicassistant --check --verbose --line-length 120
 ```
 
 Linting integration in PyCharm/IntelliJ IDEA:
@@ -34,7 +34,7 @@ Linting integration in PyCharm/IntelliJ IDEA:
 
 ### Format Code
 ```shell
-python -m black intg-template --line-length 120
+python -m black intg-musicassistant --line-length 120
 ```
 
 PyCharm/IntelliJ IDEA integration:
@@ -47,5 +47,5 @@ PyCharm/IntelliJ IDEA integration:
 ### Sort Imports
 
 ```shell
-python -m isort intg-template/.
+python -m isort intg-musicassistant/.
 ```

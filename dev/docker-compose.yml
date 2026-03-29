@@ -1,7 +1,7 @@
 # Docker Compose for development with the UC Core Simulator
 # TODO: Update the name and hostname for your integration
 version: '3.4'
-name: integration-template
+name: integration-musicassistant
 
 services:
   # Unfolded Circle Core Simulator for testing
@@ -18,14 +18,13 @@ services:
       - simulator-data:/data
 
   # Your integration service
-  # TODO: Rename 'intg-template' to match your integration folder
-  intg-template:
+  intg-musicassistant:
      build:
        context: ../
        dockerfile: ./dev/Dockerfile
-     hostname: template
+     hostname: musicassistant
      # nodemon watches for file changes and auto-restarts
-     command: bash -c "UC_INTEGRATION_INTERFACE=$(hostname -i) nodemon -e py,json --exec 'python3 -u' intg-template/driver.py"
+     command: bash -c "UC_INTEGRATION_INTERFACE=$(hostname -i) nodemon -e py,json --exec 'python3 -u' intg-musicassistant/driver.py"
      volumes:
        - ../:/app
 

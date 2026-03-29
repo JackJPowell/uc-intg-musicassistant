@@ -1,8 +1,8 @@
 [project]
 # TODO: Update project name to match your integration
-name = "uc-intg-template"
+name = "uc-intg-musicassistant"
 version = "0.1.0"
-description = "Unfolded Circle Integration Template"
+description = "Unfolded Circle Integration Music Assistant"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MPL-2.0"
@@ -13,8 +13,8 @@ authors = [
 ]
 
 # TODO: Update repository URL
-urls.Homepage = "https://github.com/yourusername/uc-intg-yourdevice"
-urls.Repository = "https://github.com/yourusername/uc-intg-yourdevice"
+urls.Homepage = "https://github.com/yourusername/uc-intg-musicassistant"
+urls.Repository = "https://github.com/yourusername/uc-intg-musicassistant"
 
 dependencies = [
     # Core dependencies

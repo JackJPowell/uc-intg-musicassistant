@@ -355,7 +355,7 @@ wheels = [
 ]
 
 [[package]]
-name = "uc-intg-template"
+name = "uc-intg-musicassistant"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
@@ -368,7 +368,7 @@ dependencies = [
 requires-dist = [
     { name = "pyee", specifier = ">=9.0" },
     { name = "ucapi", specifier = "==0.5.2" },
-    { name = "ucapi-framework", specifier = "==1.9.0" },
+    { name = "ucapi-framework", specifier = "==1.9.1" },
 ]
 
 [[package]]
@@ -388,16 +388,16 @@ wheels = [
 
 [[package]]
 name = "ucapi-framework"
-version = "1.9.0"
+version = "1.9.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "pyee" },
     { name = "ucapi" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/60/b8/caefcd1ffb5f8205b55f641471efdeb538e48cab8a02ad630cd981b57a24/ucapi_framework-1.9.0.tar.gz", hash = "sha256:8731c0b13211d76a33b1b7e614ed59167e121bb3d5d40444654da0216fd163bd", size = 152096, upload-time = "2026-03-08T17:26:56.245Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/45/35e21593a913d02291bd09096f446febb41667ce6c849fc54619283322fd/ucapi_framework-1.9.1.tar.gz", hash = "sha256:025637749d39cde6ee5470324146dd9cea52acf31534c23a14eab4a6d6c28fdf", size = 152273, upload-time = "2026-03-11T17:39:46Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/47/833c40165c9580c062983bdabaff703f84e6f5ee0fd78242bcafc7427948/ucapi_framework-1.9.0-py3-none-any.whl", hash = "sha256:4ec05cbfef3088916e8d9262c31c98f8dd6160f85bdd9b1bd4adddc657903a38", size = 96869, upload-time = "2026-03-08T17:26:54.298Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/1e/d0cdec8c79ae5256d35daa2fe3d88f198081d9d0efb5b246207d55292bb0/ucapi_framework-1.9.1-py3-none-any.whl", hash = "sha256:99eabf316b49c98b1305d42ece2f115c082304c790eb910d3bbaf823a81b61c2", size = 96975, upload-time = "2026-03-11T17:39:44.488Z" },
 ]
 
 [[package]]
