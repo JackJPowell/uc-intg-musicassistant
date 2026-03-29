@@ -1,98 +1,62 @@
 """
-Setup Flow Module.
+Music Assistant Setup Flow.
 
-This module handles the device setup and configuration process. It provides
-forms for manual device entry and validation of device connections.
+Presents a form asking for:
+  - Music Assistant server URL  (e.g. http://192.168.1.10:8095)
+  - Optional long-lived authentication token
 
-TODO: Customize the setup form fields and validation for your device.
+On submission the setup flow connects briefly to the MA server to verify the
+connection and retrieve the server_id, then returns a DeviceConfig.
 
 :license: Mozilla Public License Version 2.0, see LICENSE for more details.
 """
 
+from __future__ import annotations
+
+import asyncio
 import logging
 from typing import Any
 
 from const import DeviceConfig
+from music_assistant_client import MusicAssistantClient
 from ucapi import IntegrationSetupError, RequestUserInput, SetupError
 from ucapi_framework import BaseSetupFlow
 
 _LOG = logging.getLogger(__name__)
 
 
-class DeviceSetupFlow(BaseSetupFlow[DeviceConfig]):
-    """
-    Setup flow for device integration.
-
-    Handles device configuration through discovery or manual entry.
-    Extend this class to add custom setup logic for your device.
-    """
+class MusicAssistantSetupFlow(BaseSetupFlow[DeviceConfig]):
+    """Setup flow for a Music Assistant server."""
 
     def get_manual_entry_form(self) -> RequestUserInput:
-        """
-        Return the manual entry form for device setup.
-
-        Override this method to return a custom form for your device.
-
-        :return: RequestUserInput with form fields for manual configuration
-        """
-
-        # TODO: Customize this form for your device's setup requirements
-        # This form is displayed when the user chooses manual device entry
+        """Return the setup form shown to the user."""
         return RequestUserInput(
-            {"en": "Device Setup"},  # TODO: Update title
+            {"en": "Music Assistant Server Setup"},
             [
                 {
                     "id": "info",
-                    "label": {
-                        "en": "Setup your Device",  # TODO: Update label
-                    },
+                    "label": {"en": "Connect to Music Assistant"},
                     "field": {
                         "label": {
                             "value": {
                                 "en": (
-                                    "Please enter the connection details for your device."
-                                    # TODO: Update help text
+                                    "Enter the URL of your Music Assistant server and, "
+                                    "if authentication is enabled, a long-lived access token."
                                 ),
                             }
                         }
                     },
                 },
                 {
-                    "field": {"text": {"value": ""}},
-                    "id": "name",
-                    "label": {
-                        "en": "Device Name",
-                    },
+                    "field": {"text": {"value": "http://"}},
+                    "id": "address",
+                    "label": {"en": "Server URL (e.g. http://192.168.1.10:8095)"},
                 },
                 {
                     "field": {"text": {"value": ""}},
-                    "id": "address",
-                    "label": {
-                        "en": "IP Address or Hostname",
-                    },
+                    "id": "token",
+                    "label": {"en": "Access Token (leave blank if not required)"},
                 },
-                # TODO: Add additional fields your device needs
-                # {
-                #     "field": {"number": {"value": 8080, "min": 1, "max": 65535}},
-                #     "id": "port",
-                #     "label": {
-                #         "en": "Port",
-                #     },
-                # },
-                # {
-                #     "field": {"text": {"value": ""}},
-                #     "id": "username",
-                #     "label": {
-                #         "en": "Username",
-                #     },
-                # },
-                # {
-                #     "field": {"password": {"value": ""}},
-                #     "id": "password",
-                #     "label": {
-                #         "en": "Password",
-                #     },
-                # },
             ],
         )
 
@@ -100,75 +64,61 @@ class DeviceSetupFlow(BaseSetupFlow[DeviceConfig]):
         self, input_values: dict[str, Any]
     ) -> DeviceConfig | SetupError | RequestUserInput:
         """
-        Create device configuration from user input.
+        Validate user input, connect to MA, and return a DeviceConfig.
 
-        This method is called after the user submits the setup form.
-        It should validate the input, attempt to connect to the device,
-        and return a DeviceConfig if successful.
-
-        :param input_values: Dictionary of user input from the form
-        :return: DeviceConfig on success, SetupError on failure, or
-                 RequestUserInput to re-display the form
+        :param input_values: Form values submitted by the user
+        :return: DeviceConfig on success, SetupError on failure
         """
-        # Extract form values
-        name = input_values.get("name", "").strip()
-        address = input_values.get("address", "").strip()
-        # TODO: Extract additional fields
-        # port = input_values.get("port", 8080)
-        # username = input_values.get("username", "").strip()
-        # password = input_values.get("password", "").strip()
+        address = input_values.get("address", "").strip().rstrip("/")
+        token = input_values.get("token", "").strip() or None
 
-        # Validate required fields
-        if not address:
-            _LOG.warning("Address is required, re-displaying form")
+        if not address or address == "http://":
+            _LOG.warning("No server URL provided – re-displaying form")
             return self.get_manual_entry_form()
 
-        # Use a default name if not provided
-        if not name:
-            name = f"Device ({address})"
+        _LOG.info("Verifying Music Assistant connection: %s", address)
 
-        _LOG.debug("Attempting to connect to device at %s", address)
-
+        client = MusicAssistantClient(address, None, token=token)
         try:
-            # TODO: Implement device connection validation
-            # This should:
-            # 1. Attempt to connect to the device
-            # 2. Verify it's the expected device type
-            # 3. Retrieve device info (identifier, model, etc.)
-            #
-            # Example:
-            # client = YourDeviceClient(address, port)
-            # try:
-            #     await client.connect()
-            #     info = await client.get_device_info()
-            # finally:
-            #     await client.disconnect()
-            #
-            # identifier = info.get("serial", info.get("mac", address))
+            init_ready = asyncio.Event()
+            task = asyncio.ensure_future(client.start_listening(init_ready=init_ready))
+            try:
+                await asyncio.wait_for(init_ready.wait(), timeout=15)
+            except asyncio.TimeoutError as exc:
+                task.cancel()
+                _LOG.error("Timeout connecting to MA at %s", address)
+                raise TimeoutError from exc
 
-            # Placeholder: Generate identifier from address
-            # TODO: Replace with actual device identifier retrieval
-            identifier = address.replace(".", "_").replace(":", "_")
+            server_info = client.server_info
+            if server_info is None:
+                raise ConnectionError("No server info received")
+
+            server_id = server_info.server_id.replace("-", "_")
+            name = f"Music Assistant ({address})"
+
+            _LOG.info("Connected to MA server %s (id=%s)", address, server_id)
 
             return DeviceConfig(
-                identifier=identifier,
+                identifier=server_id,
                 name=name,
                 address=address,
-                # TODO: Add additional config fields
-                # port=port,
-                # username=username,
-                # password=password,
+                token=token or "",
             )
 
-        except ConnectionError as ex:
-            _LOG.error("Connection refused to %s: %s", address, ex)
+        except ConnectionError as exc:
+            _LOG.error("Connection refused to MA at %s: %s", address, exc)
             return SetupError(IntegrationSetupError.CONNECTION_REFUSED)
 
-        except TimeoutError as ex:
-            _LOG.error("Connection timeout to %s: %s", address, ex)
+        except TimeoutError:
+            _LOG.error("Timeout connecting to MA at %s", address)
             return SetupError(IntegrationSetupError.TIMEOUT)
 
-        except Exception as ex:
-            _LOG.error("Failed to connect to %s: %s", address, ex)
-            _LOG.info("Please verify the device address and try again")
+        except Exception as exc:  # pylint: disable=broad-except
+            _LOG.error("Unexpected error connecting to MA at %s: %s", address, exc)
             return SetupError(IntegrationSetupError.CONNECTION_REFUSED)
+
+        finally:
+            try:
+                await client.disconnect()
+            except Exception:  # pylint: disable=broad-except
+                pass

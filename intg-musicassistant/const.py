@@ -1,8 +1,8 @@
 """
-Constants for the Integration.
+Constants for the Music Assistant Integration.
 
 This module contains configuration dataclasses and constants used throughout
-the integration. Customize these for your specific device.
+the integration.
 
 :license: Mozilla Public License Version 2.0, see LICENSE for more details.
 """
@@ -14,46 +14,56 @@ from enum import StrEnum
 @dataclass
 class DeviceConfig:
     """
-    Device configuration dataclass.
+    Device configuration dataclass for a Music Assistant server.
 
-    This dataclass holds all the configuration needed to connect to and
-    identify a device. Add or remove fields as needed for your device.
+    Holds all the configuration needed to connect to a Music Assistant server.
+    The "device" in this integration is the MA server itself; individual MA
+    players are represented as separate ucapi entities.
     """
 
     identifier: str
-    """Unique identifier of the device (e.g., MAC address, serial number)."""
+    """Unique identifier for this MA server instance (derived from server URL)."""
 
     name: str
-    """Friendly name of the device for display purposes."""
+    """Friendly name for this MA server (shown in the integration list)."""
 
     address: str
-    """IP address or hostname of the device."""
+    """Base URL of the Music Assistant server (e.g. http://192.168.1.10:8095)."""
 
-    # TODO: Add any additional configuration fields your device needs
-    # Examples:
-    # port: int = 8080
-    # """Port number for device communication."""
-    # username: str = ""
-    # """Username for authentication (if required)."""
-    # password: str = ""
-    # """Password for authentication (if required)."""
-    # model: str = ""
-    # """Device model for feature detection."""
+    token: str = ""
+    """Long-lived access token for authentication (required for schema >= 28)."""
 
 
 class SimpleCommands(StrEnum):
     """
     Additional simple commands not covered by standard media-player features.
 
-    Simple commands appear in the UI as buttons the user can press.
-    Add commands specific to your device here.
-
-    Example:
-        PRESET_1 = "Preset 1"
-        PRESET_2 = "Preset 2"
-        NIGHT_MODE = "Night Mode"
+    These appear in the UC Remote UI as pressable buttons.
     """
 
-    # TODO: Define simple commands for your device
-    # EXAMPLE_COMMAND = "Example Command"
-    pass
+    CLEAR_QUEUE = "Clear Queue"
+    ADD_TO_FAVORITES = "Add to Favorites"
+
+
+# Map Music Assistant PlaybackState values to ucapi media_player States
+MA_STATE_MAP: dict[str, str] = {
+    "idle": "OFF",       # idle → treated as OFF (no active playback)
+    "paused": "PAUSED",
+    "playing": "PLAYING",
+    "unknown": "UNKNOWN",
+}
+
+# Map Music Assistant RepeatMode values to ucapi RepeatMode values
+MA_REPEAT_MAP: dict[str, str] = {
+    "off": "OFF",
+    "one": "ONE",
+    "all": "ALL",
+    "unknown": "OFF",
+}
+
+# Reverse map for ucapi → MA repeat
+UC_REPEAT_MAP: dict[str, str] = {
+    "OFF": "off",
+    "ONE": "one",
+    "ALL": "all",
+}
