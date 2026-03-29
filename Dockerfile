@@ -3,10 +3,9 @@ FROM python:3.11-slim-bullseye
 WORKDIR /app
 
 COPY ./requirements.txt requirements.txt
+COPY ./lib ./lib
 RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
 RUN mkdir /config
-
-ADD . .
 
 # Network configuration
 ENV UC_DISABLE_MDNS_PUBLISH="false"
