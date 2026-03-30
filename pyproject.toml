@@ -1,6 +1,6 @@
 [project]
 name = "uc-intg-musicassistant"
-version = "0.2.2"
+version = "0.2.3"
 description = "Unfolded Circle Integration Music Assistant"
 readme = "README.md"
 requires-python = ">=3.11"
