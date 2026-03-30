@@ -7,6 +7,8 @@ COPY ./lib ./lib
 RUN pip3 install --no-cache-dir --upgrade -r requirements.txt
 RUN mkdir /config
 
+ADD . .
+
 # Network configuration
 ENV UC_DISABLE_MDNS_PUBLISH="false"
 ENV UC_MDNS_LOCAL_HOSTNAME=""
