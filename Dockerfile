@@ -16,8 +16,6 @@ ENV UC_INTEGRATION_HTTP_PORT="9090"
 # Configuration path
 ENV UC_CONFIG_HOME="/config"
 
-# TODO: Update the image source URL
-LABEL org.opencontainers.image.source https://github.com/yourusername/uc-intg-yourdevice
+LABEL org.opencontainers.image.source https://github.com/jackjpowell/uc-intg-musicassistant
 
-# TODO: Update the path if you rename the intg-musicassistant folder
 CMD ["python3", "-u", "intg-musicassistant/driver.py"]
