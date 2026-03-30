@@ -1,135 +1,109 @@
-# Unfolded Circle Integration Music Assistant
+# Unfolded Circle Integration for Music Assistant
 
-A Music Assistant repository for creating [Unfolded Circle Remote Two/3](https://www.unfoldedcircle.com/) integration drivers using the [ucapi-framework](https://github.com/jackjpowell/ucapi-framework).
+Control [Music Assistant](https://music-assistant.io/) players from an [Unfolded Circle Remote Two or Remote 3](https://www.unfoldedcircle.com/).
 
-## Getting Started
+Music Assistant is a free, open-source media player manager that lets you play music from streaming services and local libraries through network-connected speakers. This integration exposes each MA player as a media player entity on the remote, with full playback control, library browsing, and search.
 
-1. **Clone or use this Music Assistant** to create your own integration repository
-2. **Rename the integration folder** from `intg-musicassistant` to `intg-yourdevice`
-3. **Update the following files** with your device-specific information:
-   - `driver.json` - Integration metadata (name, description, developer info)
-   - `intg-musicassistant/const.py` - Device configuration and constants
-   - `intg-musicassistant/device.py` - Device communication logic
-   - `intg-musicassistant/media_player.py` - Media player entity implementation
-   - `intg-musicassistant/setup.py` - Setup flow and configuration forms
-   - `intg-musicassistant/discover.py` - Device discovery (if applicable)
+## Features
 
-## Project Structure
+- One media player entity per Music Assistant player, automatically discovered on connection
+- Play, pause, stop, next/previous track, and seek
+- Volume and mute control
+- Repeat and shuffle toggle
+- Source selection (where supported by the player)
+- Browse the MA library by artists, albums, tracks, playlists, and radio stations with full pagination
+- Search the MA library by keyword
+- Play any browse or search result directly on a player
+- Now Playing sensor showing the current artist and track title per player
+- Queue Position sensor showing the track number within the active queue
+- Active Players sensor showing how many players are currently playing
+- Automatic mDNS discovery of Music Assistant servers on the local network
+- Persistent WebSocket connection with automatic reconnect
+
+## Requirements
+
+- [Music Assistant](https://music-assistant.io/) server 2.x running on your network
+- [Unfolded Circle Remote Two or Remote 3](https://www.unfoldedcircle.com/) with firmware supporting custom integrations
+
+## Setup
+
+### Automatic Discovery
+
+The integration advertises itself over mDNS. If your remote and MA server are on the same network segment, the remote should discover the integration automatically.
+
+### Manual Setup
+
+Open the remote's web configurator, navigate to **Integrations**, and add the integration manually using the server URL:
 
 ```
-├── driver.json              # Integration metadata and configuration
-├── intg-musicassistant/           # Main integration code (rename this folder)
-│   ├── const.py             # Constants and device configuration dataclass
-│   ├── device.py            # Device communication and state management
-│   ├── discover.py          # Network device discovery
-│   ├── driver.py            # Main entry point
-│   ├── media_player.py      # Media player entity
-│   └── setup.py             # Setup flow and user configuration
-├── config/                  # Runtime configuration storage
-├── Dockerfile               # Container build configuration
-└── requirements.txt         # Python dependencies
+http://<host>:<port>
 ```
 
-## Development
+The default Music Assistant port is `8095`.
 
-### Prerequisites
+### Access Token
 
-- Python 3.11+
-- Docker (optional, for containerized deployment)
+If your Music Assistant server requires authentication, enter the access token during setup. Leave it blank if authentication is not enabled.
 
-### Local Development
-
-1. Create a virtual environment:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Run the integration:
-   ```bash
-   python intg-musicassistant/driver.py
-   ```
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `UC_LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `DEBUG` |
-| `UC_CONFIG_HOME` | Configuration directory path | `/config` |
-| `UC_INTEGRATION_INTERFACE` | Network interface to bind | `0.0.0.0` |
-| `UC_INTEGRATION_HTTP_PORT` | HTTP port for the integration | `9090` |
-| `UC_DISABLE_MDNS_PUBLISH` | Disable mDNS advertisement | `false` |
-
-## Deployment
-
-### Install on Remote
-
-1. Build the integration package (tar.gz file)
-2. Upload via the Remote's web configurator under Integrations
-3. Configure your device through the setup wizard
+## Running the Integration
 
 ### Docker
 
 ```bash
 docker run -d \
-  --name=uc-intg-yourdevice \
+  --name=uc-intg-musicassistant \
   --network host \
   -v $(pwd)/config:/config \
   --restart unless-stopped \
-  ghcr.io/yourusername/uc-intg-yourdevice:latest
+  ghcr.io/jackjpowell/uc-intg-musicassistant:latest
 ```
 
 ### Docker Compose
 
 ```yaml
 services:
-  uc-intg-yourdevice:
-    image: ghcr.io/yourusername/uc-intg-yourdevice:latest
-    container_name: uc-intg-yourdevice
+  uc-intg-musicassistant:
+    image: ghcr.io/jackjpowell/uc-intg-musicassistant:latest
+    container_name: uc-intg-musicassistant
     network_mode: host
     volumes:
       - ./config:/config
     restart: unless-stopped
 ```
 
-## Customization Guide
+### Running Directly
 
-### Adding Entity Types
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python3 intg-musicassistant/driver.py
+```
 
-The template includes a Media Player entity. To add additional entity types:
+## Environment Variables
 
-1. Create a new entity file (e.g., `light.py`, `switch.py`, `climate.py`)
-2. Import and add the entity class to `driver.py`:
-   ```python
-   driver = BaseIntegrationDriver(
-       device_class=Device, entity_classes=[DeviceMediaPlayer, DeviceLight]
-   )
-   ```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `UC_LOG_LEVEL` | Logging level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) | `DEBUG` |
+| `UC_CONFIG_HOME` | Configuration directory path | `/config` |
+| `UC_INTEGRATION_INTERFACE` | Network interface to bind | `0.0.0.0` |
+| `UC_INTEGRATION_HTTP_PORT` | HTTP port for the integration | `9090` |
+| `UC_DISABLE_MDNS_PUBLISH` | Disable mDNS advertisement | `false` |
 
-### Implementing Device Communication
+## Project Structure
 
-In `device.py`, implement the communication methods for your device:
-
-1. `connect()` - Establish connection to the device
-2. `disconnect()` - Clean up connection
-3. `verify_connection()` - Check device availability and get current state
-4. Device-specific methods (power control, volume, etc.)
-
-### Customizing the Setup Flow
-
-In `setup.py`, modify the `_MANUAL_INPUT_SCHEMA` to add fields for your device's configuration (IP, port, credentials, etc.).
-
-## Resources
-
-- [UC Integration Python Library](https://github.com/aitatoi/integration-python-library)
-- [UCAPI Framework](https://github.com/jackjpowell/ucapi-framework)
-- [Unfolded Circle Developer Documentation](https://github.com/unfoldedcircle/core-api)
+```
+intg-musicassistant/
+├── browser.py        # Library browse and search handlers
+├── const.py          # Constants, state maps, and configuration dataclass
+├── device.py         # WebSocket connection lifecycle and MA command dispatch
+├── discover.py       # mDNS discovery of MA servers
+├── driver.py         # Main entry point
+├── media_player.py   # Media player entity (one per MA player)
+├── select_entity.py  # Select entities (repeat, shuffle, source)
+├── sensor.py         # Sensor entities (now playing, queue position, active players)
+└── setup.py          # Setup flow and user configuration forms
+```
 
 ## License
 
-Mozilla Public License Version 2.0 - see [LICENSE](LICENSE) for details.
+Mozilla Public License Version 2.0 — see [LICENSE](LICENSE) for details.
