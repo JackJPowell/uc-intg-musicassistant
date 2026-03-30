@@ -43,9 +43,8 @@ class NowPlayingSensor(SensorEntity):
         self._device = device
         self._player_id = player_id
 
-        safe_player = player_id.replace(".", "_").replace("-", "_")
         entity_id = create_entity_id(
-            EntityTypes.SENSOR, f"{config_device.identifier}_{safe_player}_now_playing"
+            EntityTypes.SENSOR, config_device.identifier, f"{player_id}_now_playing"
         )
 
         _LOG.debug(
@@ -108,9 +107,8 @@ class QueuePositionSensor(SensorEntity):
         self._device = device
         self._player_id = player_id
 
-        safe_player = player_id.replace(".", "_").replace("-", "_")
         entity_id = create_entity_id(
-            EntityTypes.SENSOR, f"{config_device.identifier}_{safe_player}_queue_pos"
+            EntityTypes.SENSOR, config_device.identifier, f"{player_id}_queue_pos"
         )
 
         _LOG.debug(

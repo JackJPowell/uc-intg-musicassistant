@@ -42,9 +42,8 @@ class SourceSelect(SelectEntity):
         self._device = device
         self._player_id = player_id
 
-        safe_player = player_id.replace(".", "_").replace("-", "_")
         entity_id = create_entity_id(
-            EntityTypes.SELECT, f"{config_device.identifier}_{safe_player}_source"
+            EntityTypes.SELECT, config_device.identifier, f"{player_id}_source"
         )
 
         sources = device.get_source_list(player_id)

@@ -84,9 +84,8 @@ class MusicAssistantMediaPlayer(MediaPlayerEntity):
         self._player_id = player_id
 
         # Build a deterministic entity ID from server + player
-        safe_player = player_id.replace(".", "_").replace("-", "_")
         entity_id = create_entity_id(
-            EntityTypes.MEDIA_PLAYER, f"{config_device.identifier}_{safe_player}"
+            EntityTypes.MEDIA_PLAYER, config_device.identifier, player_id
         )
 
         # Determine features based on what this player supports at creation time
