@@ -5,6 +5,12 @@ name: "Build & Release"
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (without v prefix, e.g. 0.2.4)'
+        required: true
+        type: string
 
 env:
   INTG_NAME: musicassistant # TODO: Change to your integration name (folder name)
@@ -31,8 +37,12 @@ jobs:
         #Id needed for env output variable
         id: get-version-and-id
         run: |
-          # Extract version from git tag (remove 'v' prefix)
-          VERSION=${GITHUB_REF#refs/tags/v}
+          # Extract version from git tag or manual input
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "DRIVER_ID=$(jq .driver_id -r driver.json)" >> $GITHUB_ENV
           # Save to Github output to later use it in Create Release job
