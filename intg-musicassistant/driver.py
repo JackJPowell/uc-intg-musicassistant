@@ -88,7 +88,7 @@ async def main() -> None:
     await driver.register_all_configured_devices()
 
     # Discover Music Assistant servers on the local network via Zeroconf (_mass._tcp.local.)
-    discovery = DeviceDiscovery(timeout=5)
+    discovery = DeviceDiscovery(timeout=4)
     setup_handler = MusicAssistantSetupFlow.create_handler(driver, discovery=discovery)
 
     await driver.api.init("driver.json", setup_handler)
