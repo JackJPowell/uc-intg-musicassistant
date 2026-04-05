@@ -1,6 +1,6 @@
 {
   "driver_id": "musicassistant_driver",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "min_core_api": "0.20.0",
   "name": { "en": "Music Assistant" },
   "icon": "uc:music",
@@ -37,5 +37,5 @@
       }
     ]
   },
-  "release_date": "2026-03-30"
+  "release_date": "2026-04-04"
 }

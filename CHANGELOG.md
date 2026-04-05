@@ -11,6 +11,15 @@ _Changes in the next release_
 
 ---
 
+## v0.2.4 - 2026-04-04
+
+### Fixed
+- Browse drill-down into artists and albums now correctly returns results. Previously, tapping an artist or album produced an empty page
+- Setup flow is now a two-step process: step one collects the server address, step two collects credentials. All recoverable failures return a correctable form instead of a hard error.
+- You can now authenticate with your username and password and a long lived access token will be generated on your behalf. Your credentials are not stored
+
+---
+
 ## v0.2.0 - 2026-03-29
 
 ### Added
