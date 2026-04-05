@@ -187,6 +187,31 @@ def _radio_item(client: MusicAssistantClient, radio: Radio | ItemMapping) -> Bro
     )
 
 
+def _parse_ma_uri(uri: str) -> tuple[MediaType, str, str]:
+    """
+    Parse a Music Assistant URI into (media_type, provider, item_id).
+
+    MA URIs have the form: ``{provider}://{media_type}/{item_id}``
+    e.g. ``library://artist/123``  ``spotify://album/xyz``
+
+    Raises ``ValueError`` if the URI cannot be parsed.
+    """
+    # Split off the provider (everything before "://")
+    if "://" not in uri:
+        raise ValueError(f"Not an MA URI: {uri!r}")
+    provider, rest = uri.split("://", 1)
+    # rest is "{media_type}/{item_id}" — item_id may itself contain slashes
+    parts = rest.split("/", 1)
+    if len(parts) != 2:
+        raise ValueError(f"Cannot parse MA URI path: {uri!r}")
+    media_type_str, item_id = parts
+    try:
+        media_type = MediaType(media_type_str)
+    except ValueError as exc:
+        raise ValueError(f"Unknown media_type {media_type_str!r} in URI: {uri!r}") from exc
+    return media_type, provider, item_id
+
+
 def _generic_item(client: MusicAssistantClient, item: Any) -> BrowseMediaItem:
     """Fallback for ItemMappings and unknown types coming from MA browse."""
     mt = getattr(item, "media_type", None)
@@ -284,10 +309,103 @@ async def browse(client: MusicAssistantClient, options: BrowseOptions) -> Browse
         root = BrowseMediaItem(title="Radio", media_class=MediaClass.RADIO, media_type=MediaContentType.RADIO, media_id=_RADIO_ID, can_browse=True, items=children)
         return BrowseResults(media=root, pagination=_pagination(page, limit, len(children), offset))
 
-    # ── MA URI → delegate to MA browse ───────────────────────────────────────
-    # MA URIs look like: library://artists/123, spotify://album/xyz, etc.
+    # ── MA URI → artist detail / album detail / generic MA browse ─────────────
+    # MA URIs have the form: {provider}://{media_type}/{item_id}
+    # e.g. library://artist/123  or  spotify://album/xyz
+    # For artist and album pages we use the dedicated API calls so the remote
+    # gets a properly populated list; falling back to client.music.browse() for
+    # everything else (provider root folders, etc.).
     _LEAF_TYPES = (MediaType.TRACK, MediaType.RADIO, MediaType.PLUGIN_SOURCE)
     try:
+        parsed_type, parsed_provider, parsed_item_id = _parse_ma_uri(media_id)
+    except ValueError:
+        parsed_type = parsed_provider = parsed_item_id = None
+
+    try:
+        if parsed_type == MediaType.ARTIST and parsed_item_id and parsed_provider:
+            # Artist detail → show albums for that artist
+            _LOG.debug("browse artist %s / %s", parsed_provider, parsed_item_id)
+            albums = await client.music.get_artist_albums(
+                item_id=parsed_item_id,
+                provider_instance_id_or_domain=parsed_provider,
+            )
+            # Also fetch the artist object so we can use its name as title
+            try:
+                artist_obj = await client.music.get_artist(
+                    item_id=parsed_item_id,
+                    provider_instance_id_or_domain=parsed_provider,
+                )
+                title = artist_obj.name
+            except Exception:  # pylint: disable=broad-except
+                title = media_id.split("/")[-1] or media_id
+            all_items = albums
+            children = [_album_item(client, a) for a in all_items[offset: offset + limit]]
+            root = BrowseMediaItem(
+                title=title,
+                media_class=MediaClass.ARTIST,
+                media_type=MediaContentType.ARTIST,
+                media_id=media_id,
+                can_browse=True,
+                items=children,
+            )
+            return BrowseResults(media=root, pagination=_pagination(page, limit, len(children), offset))
+
+        if parsed_type == MediaType.ALBUM and parsed_item_id and parsed_provider:
+            # Album detail → show tracks for that album
+            _LOG.debug("browse album %s / %s", parsed_provider, parsed_item_id)
+            tracks = await client.music.get_album_tracks(
+                item_id=parsed_item_id,
+                provider_instance_id_or_domain=parsed_provider,
+            )
+            # Fetch album object for the title
+            try:
+                album_obj = await client.music.get_album(
+                    item_id=parsed_item_id,
+                    provider_instance_id_or_domain=parsed_provider,
+                )
+                title = album_obj.name
+            except Exception:  # pylint: disable=broad-except
+                title = media_id.split("/")[-1] or media_id
+            all_items = tracks
+            children = [_track_item(client, t) for t in all_items[offset: offset + limit]]
+            root = BrowseMediaItem(
+                title=title,
+                media_class=MediaClass.ALBUM,
+                media_type=MediaContentType.ALBUM,
+                media_id=media_id,
+                can_browse=True,
+                items=children,
+            )
+            return BrowseResults(media=root, pagination=_pagination(page, limit, len(children), offset))
+
+        if parsed_type == MediaType.PLAYLIST and parsed_item_id and parsed_provider:
+            # Playlist detail → show tracks for that playlist
+            _LOG.debug("browse playlist %s / %s", parsed_provider, parsed_item_id)
+            tracks = await client.music.get_playlist_tracks(
+                item_id=parsed_item_id,
+                provider_instance_id_or_domain=parsed_provider,
+            )
+            try:
+                playlist_obj = await client.music.get_playlist(
+                    item_id=parsed_item_id,
+                    provider_instance_id_or_domain=parsed_provider,
+                )
+                title = playlist_obj.name
+            except Exception:  # pylint: disable=broad-except
+                title = media_id.split("/")[-1] or media_id
+            all_items = tracks
+            children = [_track_item(client, t) for t in all_items[offset: offset + limit]]
+            root = BrowseMediaItem(
+                title=title,
+                media_class=MediaClass.PLAYLIST,
+                media_type=MediaContentType.PLAYLIST,
+                media_id=media_id,
+                can_browse=True,
+                items=children,
+            )
+            return BrowseResults(media=root, pagination=_pagination(page, limit, len(children), offset))
+
+        # Generic fallback: delegate to MA browse (handles provider root folders, etc.)
         ma_items = await client.music.browse(path=media_id)
         children = [_generic_item(client, i) for i in ma_items[offset: offset + limit]]
         # Don't mark the wrapper as browsable if all children are leaf items
@@ -297,7 +415,6 @@ async def browse(client: MusicAssistantClient, options: BrowseOptions) -> Browse
             getattr(i, "media_type", None) not in _LEAF_TYPES
             for i in ma_items
         )
-        # Try to get a sensible title from the first item or the path
         title = media_id.split("/")[-1] or media_id
         root = BrowseMediaItem(
             title=title,
