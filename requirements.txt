@@ -1,7 +1,5 @@
 # Core dependencies
-# Use the dev build from lib/ which includes BROWSE_MEDIA, SEARCH_MEDIA, PLAY_MEDIA support.
-# Replace with a PyPI release once ucapi >= 0.5.3 is published.
-./lib/ucapi-0.5.3.dev0+gd11cfea3f.d20260320-py3-none-any.whl
+ucapi==0.6.0
 ucapi-framework==1.9.1
 pyee>=9.0
 
