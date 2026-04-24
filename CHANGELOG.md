@@ -11,6 +11,21 @@ _Changes in the next release_
 
 ---
 
+## v0.2.6 - 2026-04-23
+
+### Fixed
+- `ImportError` on startup caused by `BrowseMediaItem`, `BrowseOptions`, `BrowseResults`, `MediaClass`, `MediaContentType`, `SearchOptions`, and `SearchResults` moving from `ucapi.api_definitions` to `ucapi.media_player` in ucapi 0.6.0.
+
+---
+
+## v0.2.5 - 2026-04-18
+
+### Changed
+- Updated dependency from a local ucapi dev wheel to the published `ucapi==0.6.0` release.
+- Updated project metadata: author name and repository URLs.
+
+---
+
 ## v0.2.4 - 2026-04-04
 
 ### Fixed
