@@ -49,7 +49,9 @@ class SourceSelect(SelectEntity):
         sources = device.get_source_list(player_id)
         active = device.get_active_source(player_id)
 
-        _LOG.debug("Creating SourceSelect entity %s for player %s", entity_id, player_id)
+        _LOG.debug(
+            "Creating SourceSelect entity %s for player %s", entity_id, player_id
+        )
 
         super().__init__(
             entity_id,
@@ -90,7 +92,9 @@ class SourceSelect(SelectEntity):
         _: Any | None = None,
     ) -> ucapi.StatusCodes:
         """Handle SELECT_OPTION and navigation commands."""
-        _LOG.debug("[SourceSelect/%s] Command: %s %s", self._player_id, cmd_id, params or "")
+        _LOG.debug(
+            "[SourceSelect/%s] Command: %s %s", self._player_id, cmd_id, params or ""
+        )
 
         options = self.select_options or []
 
@@ -115,20 +119,32 @@ class SourceSelect(SelectEntity):
 
                 case select.Commands.SELECT_NEXT:
                     if options:
-                        idx = options.index(self.current_option) if self.current_option in options else -1
+                        idx = (
+                            options.index(self.current_option)
+                            if self.current_option in options
+                            else -1
+                        )
                         nxt = options[(idx + 1) % len(options)]
                         await self._device.select_source(self._player_id, nxt)
                         self.set_current_option(nxt, update=True)
 
                 case select.Commands.SELECT_PREVIOUS:
                     if options:
-                        idx = options.index(self.current_option) if self.current_option in options else 0
+                        idx = (
+                            options.index(self.current_option)
+                            if self.current_option in options
+                            else 0
+                        )
                         prev = options[(idx - 1) % len(options)]
                         await self._device.select_source(self._player_id, prev)
                         self.set_current_option(prev, update=True)
 
                 case _:
-                    _LOG.warning("[SourceSelect/%s] Unhandled command: %s", self._player_id, cmd_id)
+                    _LOG.warning(
+                        "[SourceSelect/%s] Unhandled command: %s",
+                        self._player_id,
+                        cmd_id,
+                    )
                     return ucapi.StatusCodes.NOT_IMPLEMENTED
 
             return ucapi.StatusCodes.OK
