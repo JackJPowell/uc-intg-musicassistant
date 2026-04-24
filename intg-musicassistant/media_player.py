@@ -17,13 +17,16 @@ import device as _device_module
 import ucapi
 from const import DeviceConfig, SimpleCommands
 from ucapi import EntityTypes, media_player
-from ucapi.api_definitions import (
+from ucapi.media_player import (
+    Attributes,
     BrowseOptions,
     BrowseResults,
+    Commands,
+    DeviceClasses,
+    Features,
     SearchOptions,
     SearchResults,
 )
-from ucapi.media_player import Attributes, Commands, DeviceClasses, Features
 from ucapi_framework import MediaPlayerAttributes, MediaPlayerEntity, create_entity_id
 
 _LOG = logging.getLogger(__name__)

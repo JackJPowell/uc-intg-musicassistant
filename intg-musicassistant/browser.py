@@ -34,13 +34,13 @@ from music_assistant_models.media_items import (
     Radio,
     Track,
 )
-from ucapi.api_definitions import (
+from ucapi.api_definitions import Pagination
+from ucapi.media_player import (
     BrowseMediaItem,
     BrowseOptions,
     BrowseResults,
     MediaClass,
     MediaContentType,
-    Pagination,
     SearchOptions,
     SearchResults,
 )
