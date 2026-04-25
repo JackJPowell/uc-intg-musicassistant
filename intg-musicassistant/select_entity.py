@@ -46,9 +46,6 @@ class SourceSelect(SelectEntity):
             EntityTypes.SELECT, config_device.identifier, f"{player_id}_source"
         )
 
-        sources = device.get_source_list(player_id)
-        active = device.get_active_source(player_id)
-
         _LOG.debug(
             "Creating SourceSelect entity %s for player %s", entity_id, player_id
         )
@@ -57,9 +54,9 @@ class SourceSelect(SelectEntity):
             entity_id,
             f"{player_name} – Source",
             attributes={
-                select.Attributes.STATE: select.States.ON,
-                select.Attributes.OPTIONS: sources,
-                select.Attributes.CURRENT_OPTION: active,
+                select.Attributes.STATE: select.States.UNKNOWN,
+                select.Attributes.OPTIONS: [],
+                select.Attributes.CURRENT_OPTION: "",
             },
             cmd_handler=self.handle_command,
         )
