@@ -11,6 +11,18 @@ _Changes in the next release_
 
 ---
 
+## v0.3.0 - 2026-04-25
+
+### Added
+- Source select entity re-enabled: one standalone select widget per MA player that exposes sources (Spotify, AirPlay, local library, etc.), allowing source switching directly from the Remote UI.
+
+### Fixed
+- Source select entity caused a connection timeout when the Remote fetched available entities. The `SelectEntity.options` property was returning the select options list (a `list[str]`) into the entity-level config field that ucapi expects to be a `dict` or absent — the Remote rejected the malformed definition and timed out. The fix ensures `options` returns `None` and the list is accessed via `select_options`.
+- Bundled (PyInstaller) build crashed silently on startup due to missing dependencies. `aiohttp` (used directly in setup for authentication), `orjson`, and `mashumaro` (C-extension / dynamic deps of `music-assistant-models`) were absent from `requirements.txt` and not collected by PyInstaller.
+- PyInstaller build now includes `--collect-all` for `aiohttp`, `orjson`, and `mashumaro` alongside the existing `zeroconf`, ensuring native extensions and dynamically-imported submodules are bundled correctly.
+
+---
+
 ## v0.2.6 - 2026-04-23
 
 ### Fixed
