@@ -63,7 +63,7 @@ class MusicAssistantSetupFlow(BaseSetupFlow[DeviceConfig]):
                     },
                 },
                 {
-                    "field": {"text": {"value": "http://"}},
+                    "field": {"text": {"value": ""}},
                     "id": "address",
                     "label": {
                         "en": "Server URL (e.g. http://192.168.1.10 or http://192.168.1.10:8095)"
@@ -293,6 +293,9 @@ def _normalise_address(raw: str) -> str:
     Ensure the address has a scheme and a port.
 
     * Adds ``http://`` if no scheme is present.
+    * Strips a duplicated scheme (e.g. ``http://http://...``) that can occur
+      when a user types the full URL into a field that already contains a
+      scheme prefix.
     * Appends ``:8095`` if no port is specified.
     """
     raw = raw.strip().rstrip("/")
@@ -301,6 +304,14 @@ def _normalise_address(raw: str) -> str:
     if "://" not in raw:
         raw = f"http://{raw}"
     parsed = urlparse(raw)
+    # Detect double-scheme: the hostname itself is "http" or "https",
+    # meaning the user entered something like "http://http://192.168.1.10".
+    if parsed.scheme in ("http", "https") and parsed.hostname in ("http", "https"):
+        inner = raw[len(f"{parsed.scheme}://") :]
+        _LOG.warning(
+            "Duplicate scheme detected in address %r - stripping outer scheme", raw
+        )
+        return _normalise_address(inner)
     if not parsed.port:
         parsed = parsed._replace(netloc=f"{parsed.hostname}:{_DEFAULT_PORT}")
     return urlunparse(parsed)
