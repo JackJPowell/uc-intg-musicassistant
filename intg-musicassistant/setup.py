@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 from urllib.parse import urlparse, urlunparse
 
@@ -308,6 +309,10 @@ def _normalise_address(raw: str) -> str:
     # meaning the user entered something like "http://http://192.168.1.10".
     if parsed.scheme in ("http", "https") and parsed.hostname in ("http", "https"):
         inner = raw[len(f"{parsed.scheme}://") :]
+        # Guard against infinite recursion: if inner is a bare/malformed scheme
+        # (e.g. "http:" from stripping "http://"), there is nothing valid to parse.
+        if not inner or re.match(r"^https?:/?/?$", inner):
+            return ""
         _LOG.warning(
             "Duplicate scheme detected in address %r - stripping outer scheme", raw
         )

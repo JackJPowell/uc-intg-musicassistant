@@ -11,6 +11,14 @@ _Changes in the next release_
 
 ---
 
+## v0.3.2 - 2026-06-02
+
+## Fixed
+
+- Corrected setup issue resulting in infinite recursion when parsing the url 
+
+---
+
 ## v0.3.0 - 2026-04-25
 
 ### Added
