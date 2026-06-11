@@ -236,7 +236,7 @@ class MusicAssistantSetupFlow(BaseSetupFlow[DeviceConfig]):
             init_ready = asyncio.Event()
             task = asyncio.ensure_future(client.start_listening(init_ready=init_ready))
             try:
-                await asyncio.wait_for(init_ready.wait(), timeout=15)
+                await asyncio.wait_for(init_ready.wait(), timeout=30)
             except asyncio.TimeoutError as exc:
                 task.cancel()
                 _LOG.error("Timeout connecting to MA at %s", address)

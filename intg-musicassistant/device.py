@@ -172,7 +172,7 @@ class Device(ExternalClientDevice):
         )
 
         try:
-            await asyncio.wait_for(self._init_ready.wait(), timeout=5)
+            await asyncio.wait_for(self._init_ready.wait(), timeout=30)
         except asyncio.TimeoutError as exc:
             self._listen_task.cancel()
             self._listen_task = None
