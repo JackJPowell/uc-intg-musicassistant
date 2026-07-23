@@ -21,6 +21,7 @@ from music_assistant_models.enums import EventType
 from music_assistant_models.player import Player
 from music_assistant_models.player_queue import PlayerQueue
 
+from artwork import get_image_url
 from const import DeviceConfig, MA_REPEAT_MAP, MA_STATE_MAP, UC_REPEAT_MAP
 from ucapi import media_player
 from ucapi_framework import BaseConfigManager, ExternalClientDevice
@@ -294,7 +295,7 @@ class Device(ExternalClientDevice):
             image = getattr(media_item, "image", None)
         if image is not None and self._client is not None:
             try:
-                info["media_image_url"] = self._client.get_image_url(image)
+                info["media_image_url"] = get_image_url(self._client, image)
             except Exception:  # pylint: disable=broad-except
                 pass
 

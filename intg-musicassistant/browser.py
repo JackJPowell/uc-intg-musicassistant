@@ -45,6 +45,8 @@ from ucapi.media_player import (
     SearchResults,
 )
 
+from artwork import get_image_url
+
 if TYPE_CHECKING:
     from music_assistant_client import MusicAssistantClient
 
@@ -104,7 +106,7 @@ def _image_url(client: MusicAssistantClient, item: Any) -> str | None:
             if metadata and getattr(metadata, "images", None):
                 image = metadata.images[0]
         if image is not None:
-            return client.get_image_url(image)
+            return get_image_url(client, image)
     except Exception:  # pylint: disable=broad-except
         pass
     return None
