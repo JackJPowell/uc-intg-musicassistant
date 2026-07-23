@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Include the Music Assistant queue position timestamp so the Remote resumes
+  an active playback counter immediately when reopening an activity.
+
 ## v0.3.4 - 2026-07-24
 
 ### Fixed

@@ -150,6 +150,9 @@ class MusicAssistantMediaPlayer(MediaPlayerEntity):
                 MEDIA_ALBUM=media_info.get("media_album"),
                 MEDIA_DURATION=media_info.get("media_duration"),
                 MEDIA_POSITION=media_info.get("media_position"),
+                MEDIA_POSITION_UPDATED_AT=media_info.get(
+                    "media_position_updated_at"
+                ),
                 MEDIA_IMAGE_URL=media_info.get("media_image_url"),
                 MEDIA_TYPE=media_info.get("media_type"),
             )

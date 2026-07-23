@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from asyncio import AbstractEventLoop
+from datetime import datetime, timezone
 from typing import Any
 
 from music_assistant_client import MusicAssistantClient
@@ -286,9 +287,10 @@ class Device(ExternalClientDevice):
         else:
             info["media_title"] = current.name
 
-        elapsed = queue.corrected_elapsed_time
-        if elapsed is not None:
-            info["media_position"] = int(elapsed)
+        info["media_position"] = int(queue.elapsed_time)
+        info["media_position_updated_at"] = datetime.fromtimestamp(
+            queue.elapsed_time_last_updated, tz=timezone.utc
+        ).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
         image = current.image
         if image is None and media_item is not None:
