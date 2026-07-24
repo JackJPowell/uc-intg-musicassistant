@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-_Changes in the next release_
+### Fixed
+
+- Use canonical `/imageproxy/<proxy_id>` artwork URLs with Music Assistant
+  schema 31 while retaining Python 3.11 compatibility.
 
 ## v0.3.3 - 2026-06-10
 
